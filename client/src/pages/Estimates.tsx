@@ -66,7 +66,9 @@ export default function Estimates() {
     setItems(updated);
   };
 
-  const formTotal = useMemo(() => items.reduce((sum, it) => sum + computeLineTotal(it), 0), [items]);
+  const laborSubtotal = useMemo(() => items.filter(it => it.type === "labor").reduce((sum, it) => sum + computeLineTotal(it), 0), [items]);
+  const partsSubtotal = useMemo(() => items.filter(it => it.type === "parts").reduce((sum, it) => sum + computeLineTotal(it), 0), [items]);
+  const formTotal = laborSubtotal + partsSubtotal;
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -217,7 +219,9 @@ export default function Estimates() {
 
             <LineItemForm items={items} onUpdate={updateItem} onAdd={addItem} onRemove={removeItem} />
 
-            <div className="text-right mt-2">
+            <div className="text-right space-y-1 border-t border-border pt-3">
+              {laborSubtotal > 0 && <p className="text-sm text-muted-foreground">Labor: ${laborSubtotal.toFixed(2)}</p>}
+              {partsSubtotal > 0 && <p className="text-sm text-muted-foreground">Parts: ${partsSubtotal.toFixed(2)}</p>}
               <p className="text-lg font-bold">Total: ${formTotal.toFixed(2)}</p>
             </div>
 

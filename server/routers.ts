@@ -13,6 +13,7 @@ import { ENV } from "./_core/env";
 const lineItemSchema = z.object({
   type: z.enum(["labor", "parts"]),
   description: z.string().min(1),
+  amount: z.number().min(0).optional(),
   hourlyRate: z.number().min(0).optional(),
   hours: z.number().min(0).optional(),
   quantity: z.number().min(0).optional(),
@@ -250,8 +251,29 @@ export const appRouter = router({
         date: z.string(),
         mileage: z.number().min(0).nullable().optional(),
         notes: z.string().optional(),
+        laborDescription: z.string().optional(),
+        laborHours: z.number().min(0).nullable().optional(),
+        laborRate: z.number().min(0).nullable().optional(),
+        partsDescription: z.string().optional(),
+        partsCost: z.number().min(0).nullable().optional(),
       }))
       .mutation(({ input }) => db.createServiceRecord(input)),
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        service: z.string().min(1).optional(),
+        cost: z.number().min(0).optional(),
+        date: z.string().optional(),
+        mileage: z.number().min(0).nullable().optional(),
+        notes: z.string().optional(),
+        vehicleId: z.number().nullable().optional(),
+        laborDescription: z.string().nullable().optional(),
+        laborHours: z.number().min(0).nullable().optional(),
+        laborRate: z.number().min(0).nullable().optional(),
+        partsDescription: z.string().nullable().optional(),
+        partsCost: z.number().min(0).nullable().optional(),
+      }))
+      .mutation(({ input }) => db.updateServiceRecord(input.id, input)),
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(({ input }) => db.deleteServiceRecord(input.id)),

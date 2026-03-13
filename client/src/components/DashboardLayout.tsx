@@ -18,7 +18,6 @@ import {
   Menu,
   Settings,
   LogOut,
-  CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -34,7 +33,6 @@ const navItems = [
   { path: "/service-history", label: "Service History", icon: History },
   { path: "/reports", label: "Reports", icon: BarChart3 },
   { path: "/settings", label: "Settings", icon: Settings },
-  { path: "/services", label: "Services & Plans", icon: CreditCard },
 ];
 
 

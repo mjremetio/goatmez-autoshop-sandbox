@@ -16,18 +16,12 @@ import Login from "./pages/Login";
 import Reports from "./pages/Reports";
 import Bookings from "./pages/Bookings";
 import PublicBooking from "@/pages/PublicBooking";
-import Services from "@/pages/Services";
-import PaymentSuccess from "@/pages/PaymentSuccess";
-import PaymentCancelled from "@/pages/PaymentCancelled";
 
 function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
       <Route path="/book" component={PublicBooking} />
-      <Route path="/services" component={Services} />
-      <Route path="/payment-success" component={PaymentSuccess} />
-      <Route path="/payment-cancelled" component={PaymentCancelled} />
       <Route>
         <DashboardLayout>
           <Switch>

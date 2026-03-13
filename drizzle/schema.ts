@@ -215,6 +215,11 @@ export const serviceHistory = mysqlTable(
     date: date("date").notNull(),
     mileage: int("mileage"),
     notes: text("notes"),
+    laborDescription: varchar("labor_description", { length: 500 }),
+    laborHours: decimal("labor_hours", { precision: 6, scale: 2 }),
+    laborRate: decimal("labor_rate", { precision: 10, scale: 2 }),
+    partsDescription: varchar("parts_description", { length: 500 }),
+    partsCost: decimal("parts_cost", { precision: 10, scale: 2 }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [

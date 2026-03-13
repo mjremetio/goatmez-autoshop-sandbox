@@ -78,7 +78,9 @@ export default function Invoices() {
     setItems(updated);
   };
 
-  const subtotal = useMemo(() => items.reduce((sum, it) => sum + computeLineTotal(it), 0), [items]);
+  const laborSubtotal = useMemo(() => items.filter(it => it.type === "labor").reduce((sum, it) => sum + computeLineTotal(it), 0), [items]);
+  const partsSubtotal = useMemo(() => items.filter(it => it.type === "parts").reduce((sum, it) => sum + computeLineTotal(it), 0), [items]);
+  const subtotal = laborSubtotal + partsSubtotal;
   const taxAmount = subtotal * (taxRate / 100);
   const formTotal = subtotal + taxAmount - discountAmount;
 
@@ -145,7 +147,10 @@ export default function Invoices() {
           {invoices.map((inv: any) => {
             const invTaxRate = parseFloat(inv.taxRate || "0");
             const invDiscount = parseFloat(inv.discountAmount || "0");
-            const hasExtras = invTaxRate > 0 || invDiscount > 0;
+            const laborItems = inv.items?.filter((it: any) => it.type === "labor") || [];
+            const partsItems = inv.items?.filter((it: any) => it.type === "parts") || [];
+            const laborTotal = laborItems.reduce((s: number, it: any) => s + parseFloat(it.lineTotal || "0"), 0);
+            const partsTotal = partsItems.reduce((s: number, it: any) => s + parseFloat(it.lineTotal || "0"), 0);
             return (
               <Card key={inv.id}>
                 <CardContent className="pt-4 pb-3">
@@ -158,7 +163,13 @@ export default function Invoices() {
                       </div>
                       <p className="text-sm text-muted-foreground mt-0.5">{inv.client?.name}</p>
                       {inv.vehicle && <p className="text-xs text-muted-foreground">{inv.vehicle.year} {inv.vehicle.make} {inv.vehicle.model}</p>}
-                      <p className="text-xs text-muted-foreground mt-1">{inv.items?.length || 0} item(s){hasExtras && ` | Tax: ${invTaxRate}%${invDiscount > 0 ? ` | Discount: $${invDiscount.toFixed(2)}` : ""}`}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {laborItems.length > 0 && <span>Labor: ${laborTotal.toFixed(2)}</span>}
+                        {laborItems.length > 0 && partsItems.length > 0 && <span> | </span>}
+                        {partsItems.length > 0 && <span>Parts: ${partsTotal.toFixed(2)}</span>}
+                        {invTaxRate > 0 && <span> | Tax: {invTaxRate}%</span>}
+                        {invDiscount > 0 && <span> | Disc: -${invDiscount.toFixed(2)}</span>}
+                      </p>
                     </div>
                     <div className="text-right flex flex-col items-end gap-2">
                       <p className="text-lg font-bold">${parseFloat(inv.total).toFixed(2)}</p>
@@ -257,12 +268,14 @@ export default function Invoices() {
               </div>
             </div>
 
-            {/* Totals */}
+            {/* Totals Breakdown */}
             <div className="text-right space-y-1 border-t border-border pt-3">
-              <p className="text-sm text-muted-foreground">Subtotal: ${subtotal.toFixed(2)}</p>
+              {laborSubtotal > 0 && <p className="text-sm text-muted-foreground">Labor: ${laborSubtotal.toFixed(2)}</p>}
+              {partsSubtotal > 0 && <p className="text-sm text-muted-foreground">Parts: ${partsSubtotal.toFixed(2)}</p>}
+              <p className="text-sm text-muted-foreground font-medium">Subtotal: ${subtotal.toFixed(2)}</p>
               {taxRate > 0 && <p className="text-sm text-muted-foreground">Tax ({taxRate}%): ${taxAmount.toFixed(2)}</p>}
               {discountAmount > 0 && <p className="text-sm text-muted-foreground">Discount: -${discountAmount.toFixed(2)}</p>}
-              <p className="text-lg font-bold">Total: ${formTotal.toFixed(2)}</p>
+              <p className="text-lg font-bold">Grand Total: ${formTotal.toFixed(2)}</p>
             </div>
 
             <div>

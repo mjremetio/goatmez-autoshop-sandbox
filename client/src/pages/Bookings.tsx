@@ -217,7 +217,6 @@ export default function Bookings() {
                         <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                           <span>{new Date(appt.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
                           <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{appt.time}</span>
-                          <span>{appt.durationMinutes} min</span>
                         </div>
                         {appt.notes && <p className="text-xs text-muted-foreground mt-1">{appt.notes}</p>}
                       </div>
@@ -336,36 +335,19 @@ export default function Bookings() {
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-sm">Slot Duration (minutes)</Label>
-                      <Input
-                        type="number"
-                        className="mt-1"
-                        min={15}
-                        max={240}
-                        step={15}
-                        defaultValue={settings?.slotDurationMinutes ?? 60}
-                        onBlur={(e) => {
-                          const val = parseInt(e.target.value);
-                          if (!isNaN(val) && val > 0) updateSettings.mutate({ slotDurationMinutes: val });
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-sm">Max Advance Days</Label>
-                      <Input
-                        type="number"
-                        className="mt-1"
-                        min={1}
-                        max={365}
-                        defaultValue={settings?.maxAdvanceDays ?? 30}
-                        onBlur={(e) => {
-                          const val = parseInt(e.target.value);
-                          if (!isNaN(val) && val > 0) updateSettings.mutate({ maxAdvanceDays: val });
-                        }}
-                      />
-                    </div>
+                  <div className="max-w-xs">
+                    <Label className="text-sm">Max Advance Days</Label>
+                    <Input
+                      type="number"
+                      className="mt-1"
+                      min={1}
+                      max={365}
+                      defaultValue={settings?.maxAdvanceDays ?? 30}
+                      onBlur={(e) => {
+                        const val = parseInt(e.target.value);
+                        if (!isNaN(val) && val > 0) updateSettings.mutate({ maxAdvanceDays: val });
+                      }}
+                    />
                   </div>
                   <div>
                     <Label className="text-sm mb-2 block">Available Days</Label>

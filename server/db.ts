@@ -16,6 +16,7 @@ import {
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _migrated = false;
 
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
@@ -25,6 +26,24 @@ export async function getDb() {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
     }
+  }
+  if (_db && !_migrated) {
+    _migrated = true;
+    try {
+      await _db.execute(sql`ALTER TABLE service_history ADD COLUMN labor_description VARCHAR(500) DEFAULT NULL`);
+    } catch (e) { /* column may already exist */ }
+    try {
+      await _db.execute(sql`ALTER TABLE service_history ADD COLUMN labor_hours DECIMAL(6,2) DEFAULT NULL`);
+    } catch (e) { /* column may already exist */ }
+    try {
+      await _db.execute(sql`ALTER TABLE service_history ADD COLUMN labor_rate DECIMAL(10,2) DEFAULT NULL`);
+    } catch (e) { /* column may already exist */ }
+    try {
+      await _db.execute(sql`ALTER TABLE service_history ADD COLUMN parts_description VARCHAR(500) DEFAULT NULL`);
+    } catch (e) { /* column may already exist */ }
+    try {
+      await _db.execute(sql`ALTER TABLE service_history ADD COLUMN parts_cost DECIMAL(10,2) DEFAULT NULL`);
+    } catch (e) { /* column may already exist */ }
   }
   return _db!;
 }
@@ -186,6 +205,34 @@ export async function getDashboardData() {
     .limit(10);
   const pendingInvoices = await attachClientAndVehicle(db, pendingInvoicesRaw);
 
+  // Outstanding balance (sent + overdue invoices)
+  const [outstandingResult] = await db.select({ total: sql<string>`COALESCE(SUM(total), 0)` })
+    .from(invoices)
+    .where(or(eq(invoices.status, "sent"), eq(invoices.status, "overdue")));
+
+  // Labor vs Parts revenue breakdown from paid invoices
+  let laborRevenue = 0;
+  let partsRevenue = 0;
+  try {
+    const breakdownRows = await db.select({
+      type: invoiceItems.type,
+      total: sql<string>`COALESCE(SUM(${invoiceItems.lineTotal}), 0)`,
+    }).from(invoiceItems)
+      .innerJoin(invoices, eq(invoiceItems.invoiceId, invoices.id))
+      .where(eq(invoices.status, "paid"))
+      .groupBy(invoiceItems.type);
+    for (const row of breakdownRows) {
+      if (row.type === "labor") laborRevenue = parseFloat(String(row.total)) || 0;
+      if (row.type === "parts") partsRevenue = parseFloat(String(row.total)) || 0;
+    }
+  } catch (e) { /* ignore if join fails */ }
+
+  // Recent activity (last 8 invoices created)
+  const recentInvoicesRaw = await db.select().from(invoices)
+    .orderBy(desc(invoices.createdAt))
+    .limit(8);
+  const recentInvoices = await attachClientAndVehicle(db, recentInvoicesRaw);
+
   return {
     stats: {
       totalClients: Number(clientCount.count),
@@ -194,9 +241,13 @@ export async function getDashboardData() {
       totalRevenue: parseFloat(String(revenueResult.total)) || 0,
       pendingInvoiceCount: Number(pendingInvCount.count),
       pendingEstimateCount: Number(pendingEstCount.count),
+      outstandingBalance: parseFloat(String(outstandingResult.total)) || 0,
+      laborRevenue,
+      partsRevenue,
     },
     todaysSchedule,
     pendingInvoices,
+    recentActivity: recentInvoices,
   };
 }
 
@@ -379,16 +430,20 @@ export async function getNextInvoiceNumber() {
   return (Number(result.maxNum) || 1000) + 1;
 }
 
-type LineItemInput = { type: "labor" | "parts"; description: string; hourlyRate?: number; hours?: number; quantity?: number; unitPrice?: number };
+type LineItemInput = { type: "labor" | "parts"; description: string; amount?: number; hourlyRate?: number; hours?: number; quantity?: number; unitPrice?: number };
 
 function computeLineItems(items: LineItemInput[]) {
   return items.map((it) => {
-    const lineTotal = it.type === "labor" ? (it.hourlyRate || 0) * (it.hours || 0) : (it.quantity || 1) * (it.unitPrice || 0);
+    // Labor uses flat-rate amount; parts use qty * unitPrice
+    const lineTotal = it.type === "labor"
+      ? (it.amount ?? ((it.hourlyRate || 0) * (it.hours || 0)))
+      : (it.quantity || 1) * (it.unitPrice || 0);
     return {
       type: it.type,
       description: it.description,
-      hourlyRate: String(it.hourlyRate || 0),
-      hours: String(it.hours || 0),
+      // Store flat amount in hourlyRate column, hours = "1" for new flat-rate entries
+      hourlyRate: it.type === "labor" ? String(it.amount ?? it.hourlyRate ?? 0) : String(it.hourlyRate || 0),
+      hours: it.type === "labor" ? "1" : String(it.hours || 0),
       quantity: it.quantity || 1,
       unitPrice: String(it.unitPrice || 0),
       lineTotal: lineTotal.toFixed(2),
@@ -857,6 +912,11 @@ export async function createServiceRecord(data: {
   date: string;
   mileage?: number | null;
   notes?: string;
+  laborDescription?: string;
+  laborHours?: number | null;
+  laborRate?: number | null;
+  partsDescription?: string;
+  partsCost?: number | null;
 }) {
   const db = await getDb();
   const result = await db.insert(serviceHistory).values({
@@ -868,8 +928,46 @@ export async function createServiceRecord(data: {
     date: toDate(data.date),
     mileage: data.mileage ?? null,
     notes: data.notes || "",
+    laborDescription: data.laborDescription || null,
+    laborHours: data.laborHours != null ? String(data.laborHours) : null,
+    laborRate: data.laborRate != null ? String(data.laborRate) : null,
+    partsDescription: data.partsDescription || null,
+    partsCost: data.partsCost != null ? String(data.partsCost) : null,
   });
   const id = result[0].insertId;
+  const [rec] = await db.select().from(serviceHistory).where(eq(serviceHistory.id, id)).limit(1);
+  const [withCV] = await attachClientAndVehicle(db, [rec]);
+  return withCV;
+}
+
+export async function updateServiceRecord(id: number, data: {
+  service?: string;
+  cost?: number;
+  date?: string;
+  mileage?: number | null;
+  notes?: string;
+  vehicleId?: number | null;
+  laborDescription?: string | null;
+  laborHours?: number | null;
+  laborRate?: number | null;
+  partsDescription?: string | null;
+  partsCost?: number | null;
+}) {
+  const db = await getDb();
+  const updateData: Record<string, any> = {};
+  if (data.service !== undefined) updateData.service = data.service;
+  if (data.cost !== undefined) updateData.cost = String(data.cost);
+  if (data.date !== undefined) updateData.date = toDate(data.date);
+  if (data.mileage !== undefined) updateData.mileage = data.mileage;
+  if (data.notes !== undefined) updateData.notes = data.notes;
+  if (data.vehicleId !== undefined) updateData.vehicleId = data.vehicleId;
+  if (data.laborDescription !== undefined) updateData.laborDescription = data.laborDescription;
+  if (data.laborHours !== undefined) updateData.laborHours = data.laborHours != null ? String(data.laborHours) : null;
+  if (data.laborRate !== undefined) updateData.laborRate = data.laborRate != null ? String(data.laborRate) : null;
+  if (data.partsDescription !== undefined) updateData.partsDescription = data.partsDescription;
+  if (data.partsCost !== undefined) updateData.partsCost = data.partsCost != null ? String(data.partsCost) : null;
+
+  await db.update(serviceHistory).set(updateData).where(eq(serviceHistory.id, id));
   const [rec] = await db.select().from(serviceHistory).where(eq(serviceHistory.id, id)).limit(1);
   const [withCV] = await attachClientAndVehicle(db, [rec]);
   return withCV;

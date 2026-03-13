@@ -3,10 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, Car, Calendar, DollarSign, FileText, Calculator, Plus, ArrowRight } from "lucide-react";
-import { statusColors } from "@/lib/constants";
+import { Users, Car, Calendar, DollarSign, FileText, Calculator, Plus, ArrowRight, Wrench, Package, AlertCircle } from "lucide-react";
+import { statusColors, invoiceStatusColors } from "@/lib/constants";
 import { useLocation } from "wouter";
-import { Bar, BarChart, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
+import { Bar, BarChart, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip, PieChart, Pie, Cell } from "recharts";
 
 function StatCard({ title, value, icon: Icon, color, href }: { title: string; value: string | number; icon: any; color: string; href?: string }) {
   const [, navigate] = useLocation();
@@ -74,7 +74,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Total Clients" value={stats?.totalClients ?? 0} icon={Users} color="bg-teal-600" href="/clients" />
         <StatCard title="Total Vehicles" value={stats?.totalVehicles ?? 0} icon={Car} color="bg-cyan-700" href="/clients" />
         <StatCard title="Today's Appointments" value={stats?.todaysAppointments ?? 0} icon={Calendar} color="bg-teal-500" href="/appointments" />
@@ -85,7 +85,27 @@ export default function Dashboard() {
           color="bg-emerald-600"
           href="/invoices"
         />
-        <StatCard title="Pending Invoices" value={stats?.pendingInvoiceCount ?? 0} icon={FileText} color="bg-cyan-600" href="/invoices" />
+        <StatCard
+          title="Labor Revenue"
+          value={`$${(stats?.laborRevenue ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+          icon={Wrench}
+          color="bg-blue-600"
+          href="/invoices"
+        />
+        <StatCard
+          title="Parts Revenue"
+          value={`$${(stats?.partsRevenue ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+          icon={Package}
+          color="bg-indigo-600"
+          href="/invoices"
+        />
+        <StatCard
+          title="Outstanding Balance"
+          value={`$${(stats?.outstandingBalance ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+          icon={AlertCircle}
+          color="bg-amber-600"
+          href="/invoices"
+        />
         <StatCard title="Pending Estimates" value={stats?.pendingEstimateCount ?? 0} icon={Calculator} color="bg-slate-600" href="/estimates" />
       </div>
 
@@ -114,6 +134,46 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       )}
+
+      {/* Labor vs Parts Breakdown */}
+      {(stats?.laborRevenue || stats?.partsRevenue) ? (() => {
+        const pieData = [
+          { name: "Labor", value: stats?.laborRevenue ?? 0, color: "#2563eb" },
+          { name: "Parts", value: stats?.partsRevenue ?? 0, color: "#6366f1" },
+        ].filter(d => d.value > 0);
+        const total = pieData.reduce((s, d) => s + d.value, 0);
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Wrench className="w-4 h-4 text-primary" />
+                Revenue Breakdown (Labor vs Parts)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-8">
+                <ResponsiveContainer width={160} height={160}>
+                  <PieChart>
+                    <Pie data={pieData} dataKey="value" cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={2}>
+                      {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                    </Pie>
+                    <RechartsTooltip formatter={(value: number, name: string) => [`$${value.toLocaleString("en-US", { minimumFractionDigits: 2 })}`, name]} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="space-y-2">
+                  {pieData.map((d) => (
+                    <div key={d.name} className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: d.color }} />
+                      <span className="text-sm">{d.name}: <strong>${d.value.toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong></span>
+                      <span className="text-xs text-muted-foreground">({total > 0 ? ((d.value / total) * 100).toFixed(0) : 0}%)</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })() : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Today's Schedule */}
@@ -189,6 +249,39 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Recent Activity */}
+      {data?.recentActivity && data.recentActivity.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileText className="w-4 h-4 text-primary" />
+              Recent Invoices
+              <Button variant="ghost" size="sm" className="ml-auto h-7 text-xs" onClick={() => navigate("/invoices")}>
+                View All <ArrowRight className="w-3 h-3 ml-1" />
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {data.recentActivity.map((inv: any) => (
+                <div key={inv.id} className="flex items-center justify-between p-2.5 rounded-lg bg-muted/50">
+                  <div className="flex items-center gap-3">
+                    <div>
+                      <p className="text-sm font-medium">INV-{inv.number}</p>
+                      <p className="text-xs text-muted-foreground">{inv.client?.name}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Badge className={`text-[10px] text-white ${invoiceStatusColors[inv.status] || "bg-zinc-500"}`}>{inv.status}</Badge>
+                    <p className="text-sm font-bold">${parseFloat(inv.total).toFixed(2)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

@@ -8,13 +8,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { Wrench, Calendar, Clock, ChevronLeft, ChevronRight, Check, User, Mail, Phone, Car } from "lucide-react";
+import { Wrench, Calendar, Clock, ChevronLeft, ChevronRight, Check, User, Mail, Phone, Car, PenLine } from "lucide-react";
 
 type Step = "service" | "date" | "time" | "info" | "confirmed";
 
 export default function PublicBooking() {
   const [step, setStep] = useState<Step>("service");
   const [selectedService, setSelectedService] = useState("");
+  const [showOtherInput, setShowOtherInput] = useState(false);
+  const [otherService, setOtherService] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
   const [name, setName] = useState("");
@@ -55,9 +57,10 @@ export default function PublicBooking() {
 
   const handleSubmit = () => {
     if (!name || !email || !phone) { toast.error("Please fill in all required fields"); return; }
+    if (showOtherInput && !otherService.trim()) { toast.error("Please specify the service you need"); return; }
     createBooking.mutate({
       name, email, phone,
-      service: selectedService,
+      service: showOtherInput ? otherService : selectedService,
       date: selectedDate,
       time: selectedTime,
       vehicleYear: vehicleYear || undefined,
@@ -161,16 +164,45 @@ export default function PublicBooking() {
                 {availableServices.map((s) => (
                   <Button
                     key={s}
-                    variant={selectedService === s ? "default" : "outline"}
+                    variant={selectedService === s && !showOtherInput ? "default" : "outline"}
                     className="justify-start h-auto py-3"
-                    onClick={() => { setSelectedService(s); setStep("date"); }}
+                    onClick={() => { setSelectedService(s); setShowOtherInput(false); setOtherService(""); setStep("date"); }}
                   >
                     <Wrench className="w-4 h-4 mr-2 shrink-0" />
                     {s}
                   </Button>
                 ))}
+                <Button
+                  variant={showOtherInput ? "default" : "outline"}
+                  className="justify-start h-auto py-3"
+                  onClick={() => { setShowOtherInput(true); setSelectedService(""); }}
+                >
+                  <PenLine className="w-4 h-4 mr-2 shrink-0" />
+                  Others (pls. specify)
+                </Button>
               </div>
-              {availableServices.length === 0 && (
+              {showOtherInput && (
+                <div className="mt-4 space-y-3">
+                  <div>
+                    <Label htmlFor="otherService">Please describe the service you need *</Label>
+                    <Input
+                      id="otherService"
+                      value={otherService}
+                      onChange={(e) => setOtherService(e.target.value)}
+                      placeholder="e.g. Transmission repair, custom wiring..."
+                      className="mt-1"
+                    />
+                  </div>
+                  <Button
+                    className="w-full"
+                    disabled={!otherService.trim()}
+                    onClick={() => { if (otherService.trim()) setStep("date"); }}
+                  >
+                    Continue
+                  </Button>
+                </div>
+              )}
+              {availableServices.length === 0 && !showOtherInput && (
                 <p className="text-muted-foreground text-center py-8">No services configured for online booking.</p>
               )}
             </CardContent>
@@ -262,7 +294,7 @@ export default function PublicBooking() {
                 <Button variant="ghost" size="sm" onClick={() => setStep("time")}><ChevronLeft className="w-4 h-4 mr-1" /> Back</Button>
               </div>
               <div className="text-sm text-muted-foreground space-y-1">
-                <p><strong>Service:</strong> {selectedService}</p>
+                <p><strong>Service:</strong> {showOtherInput ? otherService : selectedService}</p>
                 <p><strong>Date:</strong> {new Date(selectedDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</p>
                 <p><strong>Time:</strong> {formatTime(selectedTime)}</p>
               </div>
@@ -312,10 +344,9 @@ export default function PublicBooking() {
               <h2 className="text-2xl font-bold mb-2">Booking Confirmed!</h2>
               <p className="text-muted-foreground mb-6">A confirmation email has been sent to <strong>{email}</strong></p>
               <div className="bg-muted/50 rounded-lg p-4 inline-block text-left space-y-1">
-                <p><strong>Service:</strong> {selectedService}</p>
+                <p><strong>Service:</strong> {showOtherInput ? otherService : selectedService}</p>
                 <p><strong>Date:</strong> {new Date(selectedDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</p>
                 <p><strong>Time:</strong> {formatTime(selectedTime)}</p>
-                <p><strong>Duration:</strong> {settings?.slotDurationMinutes || 60} minutes</p>
               </div>
               <p className="text-sm text-muted-foreground mt-6">Please arrive a few minutes early. If you need to reschedule, please contact us.</p>
             </CardContent>

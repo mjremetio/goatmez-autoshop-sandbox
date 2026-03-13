@@ -9,9 +9,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Plus, Search, Pencil, Trash2, Car, Phone, Mail, User, Users, MapPin, Gauge, Loader2, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Car, Phone, Mail, User, Users, MapPin, Gauge, Loader2, ArrowUpDown, ChevronLeft, ChevronRight, FileText, Calendar, History, DollarSign, Calculator } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
+import { invoiceStatusColors, estimateStatusColors, appointmentStatusColors } from "@/lib/constants";
 
 const US_STATES = [
   "AL","AK","AZ","AR","CA","CO","CT","DE","DC","FL","GA","HI","ID","IL","IN",
@@ -28,6 +29,7 @@ export default function Clients() {
   const [editingVehicle, setEditingVehicle] = useState<any>(null);
   const [vehicleClientId, setVehicleClientId] = useState<number | null>(null);
   const [expandedClient, setExpandedClient] = useState<number | null>(null);
+  const [clientTab, setClientTab] = useState<"vehicles" | "invoices" | "estimates" | "appointments" | "history">("vehicles");
   const [deleteTarget, setDeleteTarget] = useState<{ type: "client" | "vehicle"; id: number } | null>(null);
   const [plateState, setPlateState] = useState("CA");
   const vehicleFormRef = useRef<HTMLFormElement>(null);
@@ -198,7 +200,7 @@ export default function Clients() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" className="w-8 h-8" onClick={() => setExpandedClient(expandedClient === client.id ? null : client.id)}>
+                    <Button variant="ghost" size="icon" className="w-8 h-8" onClick={() => { setExpandedClient(expandedClient === client.id ? null : client.id); setClientTab("vehicles"); }}>
                       <Car className="w-4 h-4" />
                     </Button>
                     <Button variant="ghost" size="icon" className="w-8 h-8" onClick={() => { setEditingClient(client); setShowForm(true); }}>
@@ -210,42 +212,74 @@ export default function Clients() {
                   </div>
                 </div>
 
-                {/* Vehicles */}
+                {/* Expanded Client Details */}
                 {expandedClient === client.id && (
                   <div className="mt-3 pt-3 border-t border-border">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Vehicles</p>
-                      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setVehicleClientId(client.id); setEditingVehicle(null); setShowVehicleForm(true); }}>
-                        <Plus className="w-3 h-3 mr-1" /> Add Vehicle
-                      </Button>
+                    {/* Tab Bar */}
+                    <div className="flex gap-1 mb-3 flex-wrap">
+                      {([
+                        { key: "vehicles", label: "Vehicles", icon: Car },
+                        { key: "invoices", label: "Invoices", icon: FileText },
+                        { key: "estimates", label: "Estimates", icon: Calculator },
+                        { key: "appointments", label: "Appointments", icon: Calendar },
+                        { key: "history", label: "History", icon: History },
+                      ] as const).map((t) => (
+                        <Button key={t.key} variant={clientTab === t.key ? "default" : "outline"} size="sm" className="h-7 text-xs" onClick={() => setClientTab(t.key)}>
+                          <t.icon className="w-3 h-3 mr-1" /> {t.label}
+                        </Button>
+                      ))}
                     </div>
-                    {client.vehicles && client.vehicles.length > 0 ? (
-                      <div className="space-y-2">
-                        {client.vehicles.map((v: any) => (
-                          <div key={v.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50 text-sm">
-                            <div className="flex items-center gap-2">
-                              <span>{v.year} {v.make} {v.model} {v.color && <Badge variant="outline" className="ml-2 text-[10px]">{v.color}</Badge>}</span>
-                              {v.mileage && (
-                                <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                                  <Gauge className="w-3 h-3" />{v.mileage.toLocaleString()} mi
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              {v.plate && <span>Plate: {v.plate}</span>}
-                              <Button variant="ghost" size="icon" className="w-6 h-6" onClick={() => { setEditingVehicle(v); setVehicleClientId(client.id); setShowVehicleForm(true); }}>
-                                <Pencil className="w-3 h-3" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="w-6 h-6 text-destructive" onClick={() => setDeleteTarget({ type: "vehicle", id: v.id })}>
-                                <Trash2 className="w-3 h-3" />
-                              </Button>
-                            </div>
+
+                    {/* Vehicles Tab */}
+                    {clientTab === "vehicles" && (
+                      <>
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Vehicles</p>
+                          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setVehicleClientId(client.id); setEditingVehicle(null); setShowVehicleForm(true); }}>
+                            <Plus className="w-3 h-3 mr-1" /> Add Vehicle
+                          </Button>
+                        </div>
+                        {client.vehicles && client.vehicles.length > 0 ? (
+                          <div className="space-y-2">
+                            {client.vehicles.map((v: any) => (
+                              <div key={v.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50 text-sm">
+                                <div className="flex items-center gap-2">
+                                  <span>{v.year} {v.make} {v.model} {v.color && <Badge variant="outline" className="ml-2 text-[10px]">{v.color}</Badge>}</span>
+                                  {v.mileage && (
+                                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                      <Gauge className="w-3 h-3" />{v.mileage.toLocaleString()} mi
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  {v.plate && <span>Plate: {v.plate}</span>}
+                                  <Button variant="ghost" size="icon" className="w-6 h-6" onClick={() => { setEditingVehicle(v); setVehicleClientId(client.id); setShowVehicleForm(true); }}>
+                                    <Pencil className="w-3 h-3" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" className="w-6 h-6 text-destructive" onClick={() => setDeleteTarget({ type: "vehicle", id: v.id })}>
+                                    <Trash2 className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground py-2">No vehicles registered</p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground py-2">No vehicles registered</p>
+                        )}
+                      </>
                     )}
+
+                    {/* Invoices Tab */}
+                    {clientTab === "invoices" && <ClientInvoicesTab clientId={client.id} />}
+
+                    {/* Estimates Tab */}
+                    {clientTab === "estimates" && <ClientEstimatesTab clientId={client.id} />}
+
+                    {/* Appointments Tab */}
+                    {clientTab === "appointments" && <ClientAppointmentsTab clientId={client.id} />}
+
+                    {/* Service History Tab */}
+                    {clientTab === "history" && <ClientHistoryTab clientId={client.id} />}
                   </div>
                 )}
               </CardContent>
@@ -421,6 +455,101 @@ export default function Clients() {
         title={deleteTarget?.type === "client" ? "Delete Client?" : "Remove Vehicle?"}
         description={deleteTarget?.type === "client" ? "This will also remove all associated vehicles. This action cannot be undone." : "This vehicle will be permanently removed."}
       />
+    </div>
+  );
+}
+
+// ─── Client Detail Tab Components ─────────────────────────────────
+
+function ClientInvoicesTab({ clientId }: { clientId: number }) {
+  const { data, isLoading } = trpc.invoices.list.useQuery({ clientId, perPage: 10 });
+  const invoices = data?.items || [];
+  const paidTotal = invoices.filter((i: any) => i.status === "paid").reduce((s: number, i: any) => s + parseFloat(i.total || "0"), 0);
+
+  if (isLoading) return <div className="space-y-2">{[1,2].map(i => <Skeleton key={i} className="h-10 rounded" />)}</div>;
+
+  return (
+    <div className="space-y-2">
+      {paidTotal > 0 && (
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
+          <DollarSign className="w-3 h-3" />
+          <span>Lifetime Value: <strong className="text-foreground">${paidTotal.toFixed(2)}</strong></span>
+        </div>
+      )}
+      {invoices.length > 0 ? invoices.map((inv: any) => (
+        <div key={inv.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50 text-sm">
+          <div>
+            <span className="font-medium">INV-{inv.number}</span>
+            <Badge className={`ml-2 text-[9px] text-white ${invoiceStatusColors[inv.status]}`}>{inv.status}</Badge>
+          </div>
+          <span className="font-medium">${parseFloat(inv.total).toFixed(2)}</span>
+        </div>
+      )) : <p className="text-xs text-muted-foreground py-2">No invoices</p>}
+    </div>
+  );
+}
+
+function ClientEstimatesTab({ clientId }: { clientId: number }) {
+  const { data, isLoading } = trpc.estimates.list.useQuery({ clientId, perPage: 10 });
+  const estimates = data?.items || [];
+
+  if (isLoading) return <div className="space-y-2">{[1,2].map(i => <Skeleton key={i} className="h-10 rounded" />)}</div>;
+
+  return (
+    <div className="space-y-2">
+      {estimates.length > 0 ? estimates.map((est: any) => (
+        <div key={est.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50 text-sm">
+          <div>
+            <span className="font-medium">EST-{est.number}</span>
+            <Badge className={`ml-2 text-[9px] text-white ${estimateStatusColors[est.status]}`}>{est.status}</Badge>
+          </div>
+          <span className="font-medium">${parseFloat(est.total).toFixed(2)}</span>
+        </div>
+      )) : <p className="text-xs text-muted-foreground py-2">No estimates</p>}
+    </div>
+  );
+}
+
+function ClientAppointmentsTab({ clientId }: { clientId: number }) {
+  const { data, isLoading } = trpc.appointments.list.useQuery({ clientId, perPage: 10 });
+  const appointments = Array.isArray(data) ? data : (data as any)?.items || [];
+
+  if (isLoading) return <div className="space-y-2">{[1,2].map(i => <Skeleton key={i} className="h-10 rounded" />)}</div>;
+
+  return (
+    <div className="space-y-2">
+      {appointments.length > 0 ? appointments.map((appt: any) => (
+        <div key={appt.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50 text-sm">
+          <div>
+            <span className="font-medium">{appt.service}</span>
+            <Badge className={`ml-2 text-[9px] text-white ${appointmentStatusColors[appt.status]}`}>{appt.status}</Badge>
+          </div>
+          <span className="text-xs text-muted-foreground">{appt.date} {appt.time}</span>
+        </div>
+      )) : <p className="text-xs text-muted-foreground py-2">No appointments</p>}
+    </div>
+  );
+}
+
+function ClientHistoryTab({ clientId }: { clientId: number }) {
+  const { data, isLoading } = trpc.serviceHistory.list.useQuery({ clientId, perPage: 10 });
+  const records = data?.items || [];
+
+  if (isLoading) return <div className="space-y-2">{[1,2].map(i => <Skeleton key={i} className="h-10 rounded" />)}</div>;
+
+  return (
+    <div className="space-y-2">
+      {records.length > 0 ? records.map((rec: any) => (
+        <div key={rec.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50 text-sm">
+          <div>
+            <span className="font-medium">{rec.service}</span>
+            <span className="text-xs text-muted-foreground ml-2">
+              {new Date(rec.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            </span>
+          </div>
+          <span className="font-medium">${parseFloat(rec.cost).toFixed(2)}</span>
+        </div>
+      )) : <p className="text-xs text-muted-foreground py-2">No service records</p>}
     </div>
   );
 }

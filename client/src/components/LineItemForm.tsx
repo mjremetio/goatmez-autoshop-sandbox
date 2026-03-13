@@ -1,22 +1,22 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { Plus, Trash2 } from "lucide-react";
+import { serviceCatalogByCategory, type ServiceCatalogItem } from "@/lib/constants";
 
 export interface LineItem {
   type: "labor" | "parts";
   description: string;
-  hourlyRate: number;
-  hours: number;
+  amount: number;
   quantity: number;
   unitPrice: number;
 }
 
-export const emptyLineItem: LineItem = { type: "labor", description: "", hourlyRate: 0, hours: 0, quantity: 1, unitPrice: 0 };
+export const emptyLineItem: LineItem = { type: "labor", description: "", amount: 0, quantity: 1, unitPrice: 0 };
 
 export function computeLineTotal(item: LineItem) {
-  return item.type === "labor" ? (item.hourlyRate || 0) * (item.hours || 0) : (item.quantity || 1) * (item.unitPrice || 0);
+  return item.type === "labor" ? (item.amount || 0) : (item.quantity || 1) * (item.unitPrice || 0);
 }
 
 interface LineItemFormProps {
@@ -26,7 +26,28 @@ interface LineItemFormProps {
   onRemove: (idx: number) => void;
 }
 
+const categoryLabels: Record<string, string> = {
+  diagnostic: "Diagnostics",
+  "module-programming": "Module Programming",
+  "electrical-repair": "Electrical Repair",
+  installation: "Installation",
+};
+
 export function LineItemForm({ items, onUpdate, onAdd, onRemove }: LineItemFormProps) {
+  const handleServiceSelect = (idx: number, serviceName: string) => {
+    if (serviceName === "__custom__") {
+      onUpdate(idx, "description", "");
+      onUpdate(idx, "amount", 0);
+      return;
+    }
+    const allServices = Object.values(serviceCatalogByCategory).flat();
+    const service = allServices.find((s: ServiceCatalogItem) => s.name === serviceName);
+    if (service) {
+      onUpdate(idx, "description", service.name);
+      onUpdate(idx, "amount", service.suggestedPrice);
+    }
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
@@ -46,7 +67,29 @@ export function LineItemForm({ items, onUpdate, onAdd, onRemove }: LineItemFormP
                   <SelectItem value="parts">Parts</SelectItem>
                 </SelectContent>
               </Select>
-              <Input placeholder="Description" value={item.description} onChange={(e) => onUpdate(idx, "description", e.target.value)} className="flex-1" />
+              {item.type === "labor" ? (
+                <Select
+                  value={item.description || "__custom__"}
+                  onValueChange={(v) => handleServiceSelect(idx, v)}
+                >
+                  <SelectTrigger className="flex-1"><SelectValue placeholder="Select service..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__custom__">Custom Service</SelectItem>
+                    {Object.entries(serviceCatalogByCategory).map(([cat, services]) => (
+                      <SelectGroup key={cat}>
+                        <SelectLabel>{categoryLabels[cat] || cat}</SelectLabel>
+                        {services.map((s: ServiceCatalogItem) => (
+                          <SelectItem key={s.name} value={s.name}>
+                            {s.name} — ${s.suggestedPrice}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input placeholder="Part description" value={item.description} onChange={(e) => onUpdate(idx, "description", e.target.value)} className="flex-1" />
+              )}
               {items.length > 1 && (
                 <Button type="button" variant="ghost" size="icon" className="w-7 h-7 text-destructive shrink-0" onClick={() => onRemove(idx)}>
                   <Trash2 className="w-3.5 h-3.5" />
@@ -54,10 +97,15 @@ export function LineItemForm({ items, onUpdate, onAdd, onRemove }: LineItemFormP
               )}
             </div>
             {item.type === "labor" ? (
-              <div className="grid grid-cols-3 gap-2">
-                <div><Label className="text-xs">Rate/hr</Label><Input type="number" step="0.01" min="0" value={item.hourlyRate} onChange={(e) => onUpdate(idx, "hourlyRate", parseFloat(e.target.value) || 0)} /></div>
-                <div><Label className="text-xs">Hours</Label><Input type="number" step="0.25" min="0" value={item.hours} onChange={(e) => onUpdate(idx, "hours", parseFloat(e.target.value) || 0)} /></div>
-                <div><Label className="text-xs">Total</Label><Input readOnly value={`$${((item.hourlyRate || 0) * (item.hours || 0)).toFixed(2)}`} className="bg-muted" /></div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs">Description</Label>
+                  <Input placeholder="Service description" value={item.description} onChange={(e) => onUpdate(idx, "description", e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs">Amount ($)</Label>
+                  <Input type="number" step="0.01" min="0" value={item.amount} onChange={(e) => onUpdate(idx, "amount", parseFloat(e.target.value) || 0)} />
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-3 gap-2">
