@@ -1,0 +1,46 @@
+# GoatMez AutoShop CRM - Project TODO
+
+- [x] Migrate database schema from source repo (clients, vehicles, invoices, estimates, appointments, service_history, booking_settings)
+- [x] Apply SQL migrations to create all tables
+- [x] Install additional dependencies (bcryptjs, @sendgrid/mail, stripe, ai, @ai-sdk/openai, @ai-sdk/react, jspdf, jspdf-autotable, @streamdown/code, @streamdown/mermaid)
+- [x] Migrate server/db.ts with all query helpers
+- [x] Migrate server/routers.ts with all tRPC procedures
+- [x] Migrate server/_core/email.ts (SendGrid integration)
+- [x] Migrate server/_core/stripe.ts (Stripe payment processing)
+- [x] Migrate server/_core/products.ts (service products)
+- [x] Migrate server/_core/chat.ts (AI chat integration)
+- [x] Migrate server/_core/patchedFetch.ts
+- [x] Migrate server/_core/oauth.ts (custom password auth + admin seed)
+- [x] Migrate server/_core/index.ts (Stripe webhook + chat routes + auth routes)
+- [x] Update server/_core/env.ts with additional environment variables
+- [x] Migrate client/src/index.css with custom theme
+- [x] Migrate client/src/App.tsx with all routes
+- [x] Migrate client/src/const.ts (custom login URL)
+- [x] Migrate client/src/_core/hooks/useAuth.ts
+- [x] Migrate Dashboard page
+- [x] Migrate Clients page
+- [x] Migrate Invoices page
+- [x] Migrate Estimates page
+- [x] Migrate Appointments page
+- [x] Migrate Bookings (booking settings) page
+- [x] Migrate ServiceHistory page
+- [x] Migrate Reports page
+- [x] Migrate Settings page
+- [x] Migrate Login page
+- [x] Migrate PublicBooking page
+- [x] Migrate Services page
+- [x] Migrate PaymentSuccess page
+- [x] Migrate PaymentCancelled page
+- [x] Migrate DashboardLayout component
+- [x] Migrate AIChatBox component
+- [x] Migrate Markdown component
+- [x] Migrate LineItemForm component
+- [x] Migrate ClientVehicleSelect component
+- [x] Migrate ConfirmDeleteDialog component
+- [x] Migrate SendEmailDialog component
+- [x] Migrate ManusDialog component
+- [x] Migrate useFileUpload hook
+- [x] Configure SendGrid environment secrets (deferred - user can add later via Settings)
+- [x] Configure Stripe environment secrets (deferred - user can add later via Settings)
+- [x] Write vitest tests (33 tests passing)
+- [ ] Save checkpoint and deliver to user

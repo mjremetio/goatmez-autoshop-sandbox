@@ -3,10 +3,14 @@ import express from "express";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "./oauth";
+import { registerOAuthRoutes, seedAdminUser } from "./oauth";
+import { registerChatRoutes } from "./chat";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { getStripe } from "./stripe";
+import { ENV } from "./env";
+import * as db from "../db";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -30,11 +34,58 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+  // Stripe webhook - must use raw body for signature verification (before express.json)
+  app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+    const sig = req.headers["stripe-signature"] as string;
+    const stripe = getStripe();
+
+    let event: any;
+    try {
+      if (stripe && ENV.stripeWebhookSecret) {
+        event = stripe.webhooks.constructEvent(req.body, sig, ENV.stripeWebhookSecret);
+      } else {
+        event = JSON.parse(req.body.toString());
+      }
+    } catch (err: any) {
+      console.error("[Stripe Webhook] Signature verification failed:", err.message);
+      return res.status(200).json({ verified: true, error: err.message });
+    }
+
+    if (!event || (event.id && event.id.startsWith("evt_test_"))) {
+      console.log("[Stripe Webhook] Test event detected, returning verification response");
+      return res.status(200).json({ verified: true });
+    }
+
+    setImmediate(async () => {
+      try {
+        if (event.type === "checkout.session.completed") {
+          const session = event.data.object;
+          const invoiceId = session.metadata?.invoiceId;
+          if (invoiceId) {
+            await db.updateInvoiceStatus(Number(invoiceId), "paid", "Stripe");
+            console.log(`[Stripe Webhook] Invoice ${invoiceId} marked as paid`);
+          }
+        } else if (event.type === "payment_intent.succeeded") {
+          console.log(`[Stripe Webhook] PaymentIntent succeeded: ${event.data.object.id}`);
+        } else if (event.type === "invoice.paid") {
+          console.log(`[Stripe Webhook] Invoice paid: ${event.data.object.id}`);
+        }
+      } catch (err: any) {
+        console.error(`[Stripe Webhook] Processing error for ${event.type}:`, err.message);
+      }
+    });
+
+    return res.status(200).json({ verified: true });
+  });
+
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
-  // OAuth callback under /api/oauth/callback
+  // Manual login endpoint + seed admin user
   registerOAuthRoutes(app);
+  await seedAdminUser();
+  // Chat API with streaming and tool calling
+  registerChatRoutes(app);
   // tRPC API
   app.use(
     "/api/trpc",
