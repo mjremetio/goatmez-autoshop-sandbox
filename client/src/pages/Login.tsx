@@ -76,6 +76,8 @@ export default function Login() {
                 required
                 autoComplete="username"
                 autoFocus
+                autoCapitalize="off"
+                spellCheck="false"
                 className="h-11"
               />
             </div>
@@ -90,6 +92,8 @@ export default function Login() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 autoComplete="current-password"
+                autoCapitalize="off"
+                spellCheck="false"
                 className="h-11"
               />
             </div>
