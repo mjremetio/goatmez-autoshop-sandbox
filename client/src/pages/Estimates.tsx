@@ -32,6 +32,8 @@ export default function Estimates() {
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState("number");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkStatusAction, setBulkStatusAction] = useState<string | null>(null);
   const perPage = 20;
 
   const utils = trpc.useUtils();
@@ -62,6 +64,14 @@ export default function Estimates() {
   });
   const sendEstimateEmail = trpc.email.sendEstimate.useMutation({
     onSuccess: () => { setEmailTarget(null); toast.success("Estimate email sent"); },
+    onError: (err) => toast.error(err.message),
+  });
+  const bulkConvert = trpc.estimates.convertToInvoice.useMutation({
+    onSuccess: () => { setSelectedIds(new Set()); utils.estimates.invalidate(); utils.invoices.invalidate(); utils.dashboard.invalidate(); toast.success("Estimates converted to invoices"); },
+    onError: (err) => toast.error(err.message),
+  });
+  const bulkUpdateStatus = trpc.estimates.updateStatus.useMutation({
+    onSuccess: () => { setSelectedIds(new Set()); setBulkStatusAction(null); utils.estimates.invalidate(); utils.dashboard.invalidate(); toast.success("Status updated for selected estimates"); },
     onError: (err) => toast.error(err.message),
   });
 
@@ -168,6 +178,33 @@ export default function Estimates() {
         </Button>
       </div>
 
+      {selectedIds.size > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center justify-between">
+          <span className="text-sm font-medium">{selectedIds.size} selected</span>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => {
+              selectedIds.forEach(id => {
+                const est = estimates?.find(e => e.id === id);
+                if (est?.status === "approved") {
+                  bulkConvert.mutate({ id });
+                }
+              });
+            }}>
+              Convert to Invoices
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setBulkStatusAction("sent")}>
+              Mark as Sent
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setBulkStatusAction("approved")}>
+              Mark as Approved
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedIds(new Set())}>
+              Clear
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         {statuses.map((s) => (
           <Button key={s} variant={filter === s ? "default" : "outline"} size="sm" onClick={() => { setFilter(s); setPage(1); }} className="capitalize">{s}</Button>
@@ -186,9 +223,25 @@ export default function Estimates() {
       ) : estimates && estimates.length > 0 ? (
         <div className="space-y-3">
           {estimates.map((est: any) => (
-            <Card key={est.id}>
+            <Card key={est.id} className={selectedIds.has(est.id) ? "bg-blue-50 border-blue-300" : ""}>
               <CardContent className="pt-4 pb-3">
                 <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(est.id)}
+                      onChange={(e) => {
+                        const newSet = new Set(selectedIds);
+                        if (e.target.checked) {
+                          newSet.add(est.id);
+                        } else {
+                          newSet.delete(est.id);
+                        }
+                        setSelectedIds(newSet);
+                      }}
+                      className="w-4 h-4 rounded cursor-pointer"
+                    />
+                  </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="font-semibold">EST-{est.number}</p>

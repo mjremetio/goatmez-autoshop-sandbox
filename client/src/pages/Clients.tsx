@@ -9,10 +9,43 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Plus, Search, Pencil, Trash2, Car, Phone, Mail, User, Users, MapPin, Gauge, Loader2, ArrowUpDown, ChevronLeft, ChevronRight, FileText, Calendar, History, DollarSign, Calculator } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Car, Phone, Mail, User, Users, MapPin, Gauge, Loader2, ArrowUpDown, ChevronLeft, ChevronRight, FileText, Calendar, History, DollarSign, Calculator, Download, CheckSquare, Square } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { invoiceStatusColors, estimateStatusColors, appointmentStatusColors } from "@/lib/constants";
+import { jsPDF } from "jspdf";
+import "jspdf-autotable";
+
+// ─── PDF Export Helper ───────────────────────────────────
+function exportEstimatePDF(estimate: any) {
+  const doc = new jsPDF();
+  doc.setFontSize(16);
+  doc.text(`Estimate EST-${estimate.number}`, 20, 20);
+  doc.setFontSize(10);
+  doc.text(`Status: ${estimate.status}`, 20, 30);
+  doc.text(`Valid Until: ${estimate.validUntil || "N/A"}`, 20, 37);
+  if (estimate.notes) {
+    doc.text(`Notes: ${estimate.notes}`, 20, 44);
+  }
+  
+  const tableData = (estimate.items || []).map((item: any) => [
+    item.type,
+    item.description,
+    item.type === "labor" ? `$${item.amount?.toFixed(2) || "0.00"}` : `${item.quantity} x $${item.unitPrice?.toFixed(2) || "0.00"}`,
+    item.type === "labor" ? `$${item.amount?.toFixed(2) || "0.00"}` : `$${((item.quantity || 0) * (item.unitPrice || 0)).toFixed(2)}`,
+  ]);
+  
+  (doc as any).autoTable({
+    startY: 55,
+    head: [["Type", "Description", "Unit", "Total"]],
+    body: tableData,
+  });
+  
+  const finalY = (doc as any).lastAutoTable.finalY || 55;
+  doc.setFontSize(12);
+  doc.text(`Total: $${estimate.total?.toFixed(2) || "0.00"}`, 20, finalY + 10);
+  doc.save(`EST-${estimate.number}.pdf`);
+}
 
 const US_STATES = [
   "AL","AK","AZ","AR","CA","CO","CT","DE","DC","FL","GA","HI","ID","IL","IN",
@@ -672,6 +705,12 @@ function VehicleEstimatesSection({ vehicleId, clientId }: { vehicleId: number; c
     },
     onError: (err) => toast.error(err.message),
   });
+  const convertEstimate = trpc.estimates.convertToInvoice.useMutation({
+    onSuccess: () => { 
+      toast.success("Estimate converted to invoice"); 
+    },
+    onError: (err) => toast.error(err.message),
+  });
 
   if (isLoading) return <div className="space-y-1">{[1].map(i => <Skeleton key={i} className="h-8 rounded" />)}</div>;
 
@@ -722,9 +761,17 @@ function VehicleEstimatesSection({ vehicleId, clientId }: { vehicleId: number; c
           <div className="flex items-center gap-2">
             <span className="font-medium">${parseFloat(est.total).toFixed(2)}</span>
             {est.status !== "converted" && (
-              <Button size="sm" variant="ghost" className="h-5 w-5 p-0" onClick={() => handleEditEstimate(est)}>
-                <Pencil className="w-2.5 h-2.5" />
-              </Button>
+              <>
+                <Button size="sm" variant="ghost" className="h-5 w-5 p-0" title="Edit" onClick={() => handleEditEstimate(est)}>
+                  <Pencil className="w-2.5 h-2.5" />
+                </Button>
+                <Button size="sm" variant="ghost" className="h-5 w-5 p-0" title="Convert to Invoice" onClick={() => convertEstimate.mutate({ id: est.id })}>
+                  <FileText className="w-2.5 h-2.5" />
+                </Button>
+                <Button size="sm" variant="ghost" className="h-5 w-5 p-0" title="Export PDF" onClick={() => exportEstimatePDF(est)}>
+                  <Download className="w-2.5 h-2.5" />
+                </Button>
+              </>
             )}
           </div>
         </div>

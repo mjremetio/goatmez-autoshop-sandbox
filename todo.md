@@ -56,3 +56,6 @@
 - [x] Display estimates on client detail view
 - [x] Add edit estimate functionality to client detail view
 - [x] Show estimates for each vehicle in the client detail vehicle section with edit capability
+- [x] Add quick-convert button to estimate cards
+- [x] Add PDF export functionality for estimates
+- [x] Add bulk actions (select, convert, status change) to estimates page
