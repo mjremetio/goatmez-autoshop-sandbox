@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Plus, Calculator, Trash2, ArrowRight, FileText, CalendarClock, Mail, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Calculator, Trash2, ArrowRight, FileText, CalendarClock, Mail, ArrowUpDown, ChevronLeft, ChevronRight, Pencil } from "lucide-react";
 import { estimateStatusColors } from "@/lib/constants";
 import { ClientVehicleSelect } from "@/components/ClientVehicleSelect";
 import { LineItemForm, LineItem, emptyLineItem, computeLineTotal } from "@/components/LineItemForm";
@@ -21,9 +21,12 @@ const statuses = ["all", "draft", "sent", "approved", "declined", "converted"];
 export default function Estimates() {
   const [filter, setFilter] = useState("all");
   const [showForm, setShowForm] = useState(false);
+  const [editingEstimate, setEditingEstimate] = useState<any>(null);
   const [items, setItems] = useState<LineItem[]>([{ ...emptyLineItem }]);
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
+  const [formNotes, setFormNotes] = useState("");
+  const [formValidUntil, setFormValidUntil] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [emailTarget, setEmailTarget] = useState<{ id: number; clientName: string; clientEmail: string } | null>(null);
   const [page, setPage] = useState(1);
@@ -38,7 +41,11 @@ export default function Estimates() {
   const totalPages = Math.ceil(total / perPage);
 
   const createEstimate = trpc.estimates.create.useMutation({
-    onSuccess: () => { utils.estimates.invalidate(); utils.dashboard.invalidate(); setShowForm(false); toast.success("Estimate created"); },
+    onSuccess: () => { utils.estimates.invalidate(); utils.dashboard.invalidate(); closeForm(); toast.success("Estimate created"); },
+    onError: (err) => toast.error(err.message),
+  });
+  const updateEstimate = trpc.estimates.update.useMutation({
+    onSuccess: () => { utils.estimates.invalidate(); utils.dashboard.invalidate(); closeForm(); toast.success("Estimate updated"); },
     onError: (err) => toast.error(err.message),
   });
   const updateStatus = trpc.estimates.updateStatus.useMutation({
@@ -58,6 +65,49 @@ export default function Estimates() {
     onError: (err) => toast.error(err.message),
   });
 
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingEstimate(null);
+    setItems([{ ...emptyLineItem }]);
+    setSelectedClientId("");
+    setSelectedVehicleId("");
+    setFormNotes("");
+    setFormValidUntil("");
+  };
+
+  const openNewForm = () => {
+    setEditingEstimate(null);
+    setItems([{ ...emptyLineItem }]);
+    setSelectedClientId("");
+    setSelectedVehicleId("");
+    setFormNotes("");
+    setFormValidUntil("");
+    setShowForm(true);
+  };
+
+  const openEditForm = (est: any) => {
+    setEditingEstimate(est);
+    setSelectedClientId(String(est.clientId));
+    setSelectedVehicleId(est.vehicleId ? String(est.vehicleId) : "");
+    setFormNotes(est.notes || "");
+    setFormValidUntil(est.validUntil ? new Date(est.validUntil).toISOString().slice(0, 10) : "");
+
+    // Map existing estimate items back to LineItem format
+    if (est.items && est.items.length > 0) {
+      const mappedItems: LineItem[] = est.items.map((item: any) => ({
+        type: item.type as "labor" | "parts",
+        description: item.description || "",
+        amount: item.type === "labor" ? parseFloat(item.hourlyRate || "0") : 0,
+        quantity: item.quantity || 1,
+        unitPrice: parseFloat(item.unitPrice || "0"),
+      }));
+      setItems(mappedItems);
+    } else {
+      setItems([{ ...emptyLineItem }]);
+    }
+    setShowForm(true);
+  };
+
   const addItem = () => setItems([...items, { ...emptyLineItem }]);
   const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx));
   const updateItem = (idx: number, field: string, value: any) => {
@@ -76,20 +126,35 @@ export default function Estimates() {
       toast.error("All line items must have a description");
       return;
     }
-    const fd = new FormData(e.currentTarget);
-    createEstimate.mutate({
-      clientId: Number(selectedClientId),
-      vehicleId: selectedVehicleId ? Number(selectedVehicleId) : null,
-      notes: fd.get("notes") as string,
-      validUntil: (fd.get("validUntil") as string) || null,
-      items,
-    });
+
+    if (editingEstimate) {
+      // Update existing estimate
+      updateEstimate.mutate({
+        id: editingEstimate.id,
+        clientId: Number(selectedClientId),
+        vehicleId: selectedVehicleId ? Number(selectedVehicleId) : null,
+        notes: formNotes,
+        validUntil: formValidUntil || null,
+        items,
+      });
+    } else {
+      // Create new estimate
+      createEstimate.mutate({
+        clientId: Number(selectedClientId),
+        vehicleId: selectedVehicleId ? Number(selectedVehicleId) : null,
+        notes: formNotes,
+        validUntil: formValidUntil || null,
+        items,
+      });
+    }
   };
 
   const formatDate = (dateStr: string) => {
     try { return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); }
     catch { return dateStr; }
   };
+
+  const isEditable = (status: string) => status !== "converted";
 
   return (
     <div className="p-6 space-y-6">
@@ -98,7 +163,7 @@ export default function Estimates() {
           <h1 className="text-2xl font-bold">Estimates</h1>
           <p className="text-sm text-muted-foreground mt-1">Create and manage job estimates</p>
         </div>
-        <Button onClick={() => { setShowForm(true); setItems([{ ...emptyLineItem }]); setSelectedClientId(""); setSelectedVehicleId(""); }}>
+        <Button onClick={openNewForm}>
           <Plus className="w-4 h-4 mr-2" /> New Estimate
         </Button>
       </div>
@@ -140,6 +205,11 @@ export default function Estimates() {
                   <div className="text-right flex flex-col items-end gap-2">
                     <p className="text-lg font-bold">${parseFloat(est.total).toFixed(2)}</p>
                     <div className="flex gap-1 flex-wrap justify-end">
+                      {isEditable(est.status) && (
+                        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => openEditForm(est)}>
+                          <Pencil className="w-3 h-3 mr-1" /> Edit
+                        </Button>
+                      )}
                       {est.client?.email && (
                         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setEmailTarget({ id: est.id, clientName: est.client.name, clientEmail: est.client.email })}>
                           <Mail className="w-3 h-3 mr-1" /> Email
@@ -199,11 +269,11 @@ export default function Estimates() {
         </div>
       )}
 
-      {/* Create Estimate Dialog */}
-      <Dialog open={showForm} onOpenChange={setShowForm}>
+      {/* Create / Edit Estimate Dialog */}
+      <Dialog open={showForm} onOpenChange={(open) => { if (!open) closeForm(); }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>New Estimate</DialogTitle>
+            <DialogTitle>{editingEstimate ? `Edit Estimate EST-${editingEstimate.number}` : "New Estimate"}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <ClientVehicleSelect
@@ -214,7 +284,13 @@ export default function Estimates() {
             />
             <div>
               <Label htmlFor="validUntil">Valid Until</Label>
-              <Input id="validUntil" name="validUntil" type="date" />
+              <Input
+                id="validUntil"
+                name="validUntil"
+                type="date"
+                value={formValidUntil}
+                onChange={(e) => setFormValidUntil(e.target.value)}
+              />
             </div>
 
             <LineItemForm items={items} onUpdate={updateItem} onAdd={addItem} onRemove={removeItem} />
@@ -227,12 +303,23 @@ export default function Estimates() {
 
             <div>
               <Label htmlFor="notes">Notes</Label>
-              <Textarea id="notes" name="notes" rows={2} />
+              <Textarea
+                id="notes"
+                name="notes"
+                rows={2}
+                value={formNotes}
+                onChange={(e) => setFormNotes(e.target.value)}
+              />
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-              <Button type="submit" disabled={!selectedClientId || createEstimate.isPending}>Create Estimate</Button>
+              <Button type="button" variant="outline" onClick={closeForm}>Cancel</Button>
+              <Button
+                type="submit"
+                disabled={!selectedClientId || createEstimate.isPending || updateEstimate.isPending}
+              >
+                {editingEstimate ? "Save Changes" : "Create Estimate"}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

@@ -698,6 +698,52 @@ export async function createEstimate(data: {
   return { ...withCV, items: estItems };
 }
 
+export async function updateEstimate(id: number, data: {
+  clientId?: number;
+  vehicleId?: number | null;
+  notes?: string;
+  validUntil?: string | null;
+  items: LineItemInput[];
+}) {
+  const db = await getDb();
+  // Guard: prevent editing converted estimates
+  const [existing] = await db.select().from(estimates).where(eq(estimates.id, id)).limit(1);
+  if (!existing) throw new Error("Estimate not found");
+  if (existing.status === "converted") throw new Error("Cannot edit a converted estimate");
+
+  const items = computeLineItems(data.items);
+  const total = items.reduce((s, it) => s + parseFloat(it.lineTotal), 0).toFixed(2);
+
+  const updateData: any = {
+    notes: data.notes || "",
+    total,
+    validUntil: data.validUntil ? toDate(data.validUntil) : null,
+  };
+  if (data.clientId !== undefined) updateData.clientId = data.clientId;
+  if (data.vehicleId !== undefined) updateData.vehicleId = data.vehicleId ?? null;
+
+  await db.update(estimates).set(updateData).where(eq(estimates.id, id));
+
+  // Replace line items
+  await db.delete(estimateItems).where(eq(estimateItems.estimateId, id));
+  if (items.length > 0) {
+    await db.insert(estimateItems).values(
+      items.map((it) => ({
+        estimateId: id,
+        type: it.type as "labor" | "parts",
+        description: it.description,
+        hourlyRate: it.hourlyRate,
+        hours: it.hours,
+        quantity: it.quantity,
+        unitPrice: it.unitPrice,
+        lineTotal: it.lineTotal,
+      }))
+    );
+  }
+
+  return getEstimate(id);
+}
+
 export async function updateEstimateStatus(id: number, status: string) {
   const db = await getDb();
   await db.update(estimates).set({ status: status as any }).where(eq(estimates.id, id));

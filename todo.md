@@ -50,3 +50,6 @@
 - [x] Sync latest changes from https://github.com/mjremetio/goatmez-autoshop
 - [x] Apply updated/new files to goatmez-crm project
 - [x] Test and save checkpoint
+- [x] Add server-side update mutation for estimates (update estimate + line items)
+- [x] Add edit UI to Estimates page (edit button, pre-filled form, save changes)
+- [x] Write/update tests for estimate edit functionality

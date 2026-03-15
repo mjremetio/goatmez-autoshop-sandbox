@@ -190,6 +190,16 @@ export const appRouter = router({
         items: z.array(lineItemSchema).min(1),
       }))
       .mutation(({ input }) => db.createEstimate(input)),
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        clientId: z.number().optional(),
+        vehicleId: z.number().nullable().optional(),
+        notes: z.string().optional(),
+        validUntil: z.string().nullable().optional(),
+        items: z.array(lineItemSchema).min(1),
+      }))
+      .mutation(({ input }) => db.updateEstimate(input.id, input)),
     updateStatus: protectedProcedure
       .input(z.object({ id: z.number(), status: z.enum(["draft", "sent", "approved", "declined", "converted"]) }))
       .mutation(({ input }) => db.updateEstimateStatus(input.id, input.status)),
