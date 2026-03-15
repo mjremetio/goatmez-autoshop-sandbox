@@ -55,3 +55,4 @@
 - [x] Write/update tests for estimate edit functionality
 - [x] Display estimates on client detail view
 - [x] Add edit estimate functionality to client detail view
+- [x] Show estimates for each vehicle in the client detail vehicle section with edit capability
