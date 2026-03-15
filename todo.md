@@ -53,3 +53,5 @@
 - [x] Add server-side update mutation for estimates (update estimate + line items)
 - [x] Add edit UI to Estimates page (edit button, pre-filled form, save changes)
 - [x] Write/update tests for estimate edit functionality
+- [x] Display estimates on client detail view
+- [x] Add edit estimate functionality to client detail view

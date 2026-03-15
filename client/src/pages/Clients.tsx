@@ -490,22 +490,119 @@ function ClientInvoicesTab({ clientId }: { clientId: number }) {
 }
 
 function ClientEstimatesTab({ clientId }: { clientId: number }) {
+  const [editingEstimate, setEditingEstimate] = useState<any>(null);
+  const [showEditForm, setShowEditForm] = useState(false);
   const { data, isLoading } = trpc.estimates.list.useQuery({ clientId, perPage: 10 });
   const estimates = data?.items || [];
+  const updateEstimate = trpc.estimates.update.useMutation({
+    onSuccess: () => { setEditingEstimate(null); setShowEditForm(false); toast.success("Estimate updated"); },
+    onError: (err) => toast.error(err.message),
+  });
 
   if (isLoading) return <div className="space-y-2">{[1,2].map(i => <Skeleton key={i} className="h-10 rounded" />)}</div>;
+
+  const handleEditEstimate = (est: any) => {
+    setEditingEstimate(est);
+    setShowEditForm(true);
+  };
+
+  const handleSaveEstimate = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editingEstimate) return;
+    const fd = new FormData(e.currentTarget);
+    const items = [];
+    let i = 0;
+    while (fd.get(`items.${i}.type`)) {
+      items.push({
+        type: fd.get(`items.${i}.type`) as string,
+        description: fd.get(`items.${i}.description`) as string,
+        amount: fd.get(`items.${i}.amount`) ? parseFloat(fd.get(`items.${i}.amount`) as string) : undefined,
+        quantity: fd.get(`items.${i}.quantity`) ? parseInt(fd.get(`items.${i}.quantity`) as string) : undefined,
+        unitPrice: fd.get(`items.${i}.unitPrice`) ? parseFloat(fd.get(`items.${i}.unitPrice`) as string) : undefined,
+      });
+      i++;
+    }
+    updateEstimate.mutate({
+      id: editingEstimate.id,
+      clientId: editingEstimate.clientId,
+      vehicleId: editingEstimate.vehicleId,
+      notes: fd.get("notes") as string,
+      validUntil: fd.get("validUntil") as string,
+      items: items as any,
+    });
+  };
 
   return (
     <div className="space-y-2">
       {estimates.length > 0 ? estimates.map((est: any) => (
         <div key={est.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50 text-sm">
-          <div>
-            <span className="font-medium">EST-{est.number}</span>
-            <Badge className={`ml-2 text-[9px] text-white ${estimateStatusColors[est.status]}`}>{est.status}</Badge>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <span className="font-medium">EST-{est.number}</span>
+              <Badge className={`text-[9px] text-white ${estimateStatusColors[est.status]}`}>{est.status}</Badge>
+            </div>
+            {est.notes && <p className="text-xs text-muted-foreground mt-1">{est.notes}</p>}
           </div>
-          <span className="font-medium">${parseFloat(est.total).toFixed(2)}</span>
+          <div className="flex items-center gap-2">
+            <span className="font-medium">${parseFloat(est.total).toFixed(2)}</span>
+            {est.status !== "converted" && (
+              <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => handleEditEstimate(est)}>
+                <Pencil className="w-3 h-3" />
+              </Button>
+            )}
+          </div>
         </div>
       )) : <p className="text-xs text-muted-foreground py-2">No estimates</p>}
+
+      <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Estimate EST-{editingEstimate?.number}</DialogTitle>
+          </DialogHeader>
+          {editingEstimate && (
+            <form onSubmit={handleSaveEstimate} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="notes">Notes</Label>
+                  <Textarea id="notes" name="notes" placeholder="Additional details" defaultValue={editingEstimate.notes || ""} className="h-16" />
+                </div>
+                <div>
+                  <Label htmlFor="validUntil">Valid Until</Label>
+                  <Input id="validUntil" name="validUntil" type="date" defaultValue={editingEstimate.validUntil || ""} />
+                </div>
+              </div>
+              <div>
+                <Label className="text-sm font-semibold mb-2 block">Line Items</Label>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {editingEstimate.items?.map((item: any, idx: number) => (
+                    <div key={idx} className="p-2 border rounded-md bg-muted/30 space-y-1">
+                      <input type="hidden" name={`items.${idx}.type`} value={item.type} />
+                      <div className="text-xs font-medium text-muted-foreground uppercase">{item.type}</div>
+                      <Input name={`items.${idx}.description`} placeholder="Description" defaultValue={item.description} className="h-8" />
+                      {item.type === "labor" && (
+                        <Input name={`items.${idx}.amount`} type="number" step="0.01" placeholder="Amount" defaultValue={item.amount} className="h-8" />
+                      )}
+                      {item.type === "parts" && (
+                        <div className="grid grid-cols-2 gap-2">
+                          <Input name={`items.${idx}.quantity`} type="number" placeholder="Qty" defaultValue={item.quantity} className="h-8" />
+                          <Input name={`items.${idx}.unitPrice`} type="number" step="0.01" placeholder="Unit Price" defaultValue={item.unitPrice} className="h-8" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setShowEditForm(false)}>Cancel</Button>
+                <Button type="submit" disabled={updateEstimate.isPending}>
+                  {updateEstimate.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Save Changes
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
