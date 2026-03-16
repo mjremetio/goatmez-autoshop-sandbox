@@ -81,14 +81,14 @@ export function clearAttempts(ip: string, username: string): void {
 // Periodic cleanup of expired records
 setInterval(() => {
   const now = Date.now();
-  for (const [key, record] of ipAttempts) {
+  Array.from(ipAttempts.entries()).forEach(([key, record]) => {
     if (now - record.firstAttempt > WINDOW_MS && (!record.lockedUntil || now > record.lockedUntil)) {
       ipAttempts.delete(key);
     }
-  }
-  for (const [key, record] of usernameAttempts) {
+  });
+  Array.from(usernameAttempts.entries()).forEach(([key, record]) => {
     if (now - record.firstAttempt > WINDOW_MS && (!record.lockedUntil || now > record.lockedUntil)) {
       usernameAttempts.delete(key);
     }
-  }
+  });
 }, CLEANUP_INTERVAL_MS);
