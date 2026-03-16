@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Wrench, Loader2, AlertCircle } from "lucide-react";
+import { Wrench, Loader2, AlertCircle, ShieldCheck } from "lucide-react";
 
 export default function Login() {
   const [, navigate] = useLocation();
@@ -12,23 +12,28 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isLocked, setIsLocked] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
+    setIsLocked(false);
 
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username: username.trim(), password }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
+        if (res.status === 429) {
+          setIsLocked(true);
+        }
         setError(data.error || "Login failed");
         setLoading(false);
         return;
@@ -59,8 +64,16 @@ export default function Login() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
-              <div className="flex items-center gap-2 rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
-                <AlertCircle className="h-4 w-4 shrink-0" />
+              <div className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${
+                isLocked
+                  ? "bg-orange-500/10 border-orange-500/20 text-orange-600 dark:text-orange-400"
+                  : "bg-destructive/10 border-destructive/20 text-destructive"
+              }`}>
+                {isLocked ? (
+                  <ShieldCheck className="h-4 w-4 shrink-0" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                )}
                 {error}
               </div>
             )}
@@ -79,6 +92,8 @@ export default function Login() {
                 autoCapitalize="off"
                 spellCheck="false"
                 className="h-11"
+                maxLength={100}
+                disabled={isLocked}
               />
             </div>
 
@@ -95,19 +110,22 @@ export default function Login() {
                 autoCapitalize="off"
                 spellCheck="false"
                 className="h-11"
+                disabled={isLocked}
               />
             </div>
 
             <Button
               type="submit"
               className="w-full h-11 text-base font-medium"
-              disabled={loading || !username || !password}
+              disabled={loading || !username.trim() || !password || isLocked}
             >
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Signing in...
                 </>
+              ) : isLocked ? (
+                "Account Temporarily Locked"
               ) : (
                 "Sign In"
               )}

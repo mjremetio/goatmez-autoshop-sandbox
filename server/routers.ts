@@ -10,6 +10,12 @@ import { z } from "zod";
 import * as db from "./db";
 import { ENV } from "./_core/env";
 
+const passwordSchema = z.string()
+  .min(8, "Password must be at least 8 characters")
+  .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+  .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+  .regex(/[0-9]/, "Password must contain at least one number");
+
 const lineItemSchema = z.object({
   type: z.enum(["labor", "parts"]),
   description: z.string().min(1),
@@ -37,7 +43,7 @@ export const appRouter = router({
     create: adminProcedure
       .input(z.object({
         username: z.string().min(1).max(100),
-        password: z.string().min(6),
+        password: passwordSchema,
         name: z.string().optional(),
         email: z.string().email().optional().or(z.literal("")),
         role: z.enum(["user", "admin"]).optional(),
@@ -47,7 +53,7 @@ export const appRouter = router({
       .input(z.object({ id: z.number(), role: z.enum(["user", "admin"]) }))
       .mutation(({ input }) => db.updateUserRole(input.id, input.role)),
     updatePassword: adminProcedure
-      .input(z.object({ id: z.number(), password: z.string().min(6) }))
+      .input(z.object({ id: z.number(), password: passwordSchema }))
       .mutation(({ input }) => db.updateUserPassword(input.id, input.password)),
     updateProfile: adminProcedure
       .input(z.object({ id: z.number(), name: z.string().optional(), email: z.string().email().optional().or(z.literal("")) }))
