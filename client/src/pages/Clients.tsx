@@ -248,6 +248,11 @@ export default function Clients() {
                 {/* Expanded Client Details */}
                 {expandedClient === client.id && (
                   <div className="mt-3 pt-3 border-t border-border">
+                    {/* Estimates Section at Top Level */}
+                    <div className="mb-4 pb-4 border-b border-border">
+                      <ClientEstimatesTabTopLevel clientId={client.id} clientName={client.name} clientEmail={client.email} clientPhone={client.phone} />
+                    </div>
+
                     {/* Tab Bar */}
                     <div className="flex gap-1 mb-3 flex-wrap">
                       {([
@@ -824,6 +829,215 @@ function VehicleEstimatesSection({ vehicleId, clientId }: { vehicleId: number; c
               </DialogFooter>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+
+// ─── Client Estimates Tab (Top Level) ───────────────────────────────────
+
+function ClientEstimatesTabTopLevel({ clientId, clientName, clientEmail, clientPhone }: { clientId: number; clientName: string; clientEmail?: string; clientPhone?: string }) {
+  const [editingEstimate, setEditingEstimate] = useState<any>(null);
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [showStatusDialog, setShowStatusDialog] = useState(false);
+  const [statusAction, setStatusAction] = useState<"approve" | "decline" | null>(null);
+  const [messageType, setMessageType] = useState<"email" | "sms">("email");
+  const [messageText, setMessageText] = useState("");
+  const [selectedEstimate, setSelectedEstimate] = useState<any>(null);
+  
+  const { data, isLoading } = trpc.estimates.list.useQuery({ clientId, perPage: 100 });
+  const estimates = data?.items || [];
+  
+  const updateEstimate = trpc.estimates.update.useMutation({
+    onSuccess: () => { setEditingEstimate(null); setShowEditForm(false); toast.success("Estimate updated"); },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const updateStatus = trpc.estimates.updateStatus.useMutation({
+    onSuccess: () => { setStatusAction(null); setShowStatusDialog(false); toast.success("Status updated"); },
+    onError: (err) => toast.error(err.message),
+  });
+
+  if (isLoading) return <div className="space-y-2">{[1,2].map(i => <Skeleton key={i} className="h-12 rounded" />)}</div>;
+
+  const handleEditEstimate = (est: any) => {
+    setEditingEstimate(est);
+    setShowEditForm(true);
+  };
+
+  const handleSaveEstimate = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editingEstimate) return;
+    const fd = new FormData(e.currentTarget);
+    const items = [];
+    let i = 0;
+    while (fd.get(`items.${i}.type`)) {
+      items.push({
+        type: fd.get(`items.${i}.type`) as string,
+        description: fd.get(`items.${i}.description`) as string,
+        amount: fd.get(`items.${i}.amount`) ? parseFloat(fd.get(`items.${i}.amount`) as string) : undefined,
+        quantity: fd.get(`items.${i}.quantity`) ? parseInt(fd.get(`items.${i}.quantity`) as string) : undefined,
+        unitPrice: fd.get(`items.${i}.unitPrice`) ? parseFloat(fd.get(`items.${i}.unitPrice`) as string) : undefined,
+      });
+      i++;
+    }
+    updateEstimate.mutate({
+      id: editingEstimate.id,
+      clientId: editingEstimate.clientId,
+      vehicleId: editingEstimate.vehicleId,
+      notes: fd.get("notes") as string,
+      validUntil: fd.get("validUntil") as string,
+      items: items as any,
+    });
+  };
+
+  const sendEstimateEmail = trpc.messaging.sendEstimateStatusEmail.useMutation({
+    onSuccess: () => toast.success("Email sent to client"),
+    onError: (err) => toast.error(err.message),
+  });
+
+  const handleApproveDecline = (est: any, action: "approve" | "decline") => {
+    setSelectedEstimate(est);
+    setStatusAction(action);
+    setShowStatusDialog(true);
+  };
+
+  const handleSendMessage = () => {
+    if (!selectedEstimate || !clientEmail) return;
+    const newStatus = statusAction === "approve" ? "approved" : "declined";
+    updateStatus.mutate({ id: selectedEstimate.id, status: newStatus });
+    sendEstimateEmail.mutate({
+      estimateId: selectedEstimate.id,
+      clientEmail,
+      clientName,
+      status: newStatus as "approved" | "declined",
+      message: messageText || undefined,
+    });
+    setMessageText("");
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Pending Estimates</p>
+      </div>
+      
+      {estimates.length > 0 ? estimates.map((est: any) => (
+        <div key={est.id} className="border rounded-lg p-3 bg-card space-y-2">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">EST-{est.number}</span>
+                <Badge className={`text-[9px] text-white ${estimateStatusColors[est.status]}`}>{est.status}</Badge>
+                {est.notes && <p className="text-xs text-muted-foreground mt-1">{est.notes}</p>}
+              </div>
+            </div>
+            <span className="font-semibold text-lg">${parseFloat(est.total).toFixed(2)}</span>
+          </div>
+
+          {/* Action Buttons */}
+          {est.status !== "converted" && est.status !== "approved" && est.status !== "declined" && (
+            <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
+              <Button size="sm" variant="default" className="h-8 text-xs" onClick={() => handleApproveDecline(est, "approve")}>
+                <CheckSquare className="w-3 h-3 mr-1" /> Approve
+              </Button>
+              <Button size="sm" variant="destructive" className="h-8 text-xs" onClick={() => handleApproveDecline(est, "decline")}>
+                <Square className="w-3 h-3 mr-1" /> Decline
+              </Button>
+              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => handleEditEstimate(est)}>
+                <Pencil className="w-3 h-3 mr-1" /> Edit
+              </Button>
+              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => exportEstimatePDF(est)}>
+                <Download className="w-3 h-3 mr-1" /> PDF
+              </Button>
+            </div>
+          )}
+        </div>
+      )) : <p className="text-xs text-muted-foreground py-2">No estimates</p>}
+
+      {/* Edit Estimate Dialog */}
+      <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Estimate EST-{editingEstimate?.number}</DialogTitle>
+          </DialogHeader>
+          {editingEstimate && (
+            <form onSubmit={handleSaveEstimate} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="notes">Notes</Label>
+                  <Textarea id="notes" name="notes" placeholder="Additional details" defaultValue={editingEstimate.notes || ""} className="h-16" />
+                </div>
+                <div>
+                  <Label htmlFor="validUntil">Valid Until</Label>
+                  <Input id="validUntil" name="validUntil" type="date" defaultValue={editingEstimate.validUntil || ""} />
+                </div>
+              </div>
+              <div>
+                <Label className="text-sm font-semibold mb-2 block">Line Items</Label>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {editingEstimate.items?.map((item: any, idx: number) => (
+                    <div key={idx} className="p-2 border rounded-md bg-muted/30 space-y-1">
+                      <input type="hidden" name={`items.${idx}.type`} value={item.type} />
+                      <div className="text-xs font-medium text-muted-foreground uppercase">{item.type}</div>
+                      <Input name={`items.${idx}.description`} placeholder="Description" defaultValue={item.description} className="h-8" />
+                      {item.type === "labor" && (
+                        <Input name={`items.${idx}.amount`} type="number" step="0.01" placeholder="Amount" defaultValue={item.amount} className="h-8" />
+                      )}
+                      {item.type === "parts" && (
+                        <div className="grid grid-cols-2 gap-2">
+                          <Input name={`items.${idx}.quantity`} type="number" placeholder="Qty" defaultValue={item.quantity} className="h-8" />
+                          <Input name={`items.${idx}.unitPrice`} type="number" step="0.01" placeholder="Unit Price" defaultValue={item.unitPrice} className="h-8" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setShowEditForm(false)}>Cancel</Button>
+                <Button type="submit" disabled={updateEstimate.isPending}>
+                  {updateEstimate.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Save Changes
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Approve/Decline Dialog with Message */}
+      <Dialog open={showStatusDialog} onOpenChange={setShowStatusDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{statusAction === "approve" ? "Approve" : "Decline"} Estimate EST-{selectedEstimate?.number}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-sm mb-2 block">Notify {clientName} via:</Label>
+              <div className="flex gap-2">
+                <Button variant={messageType === "email" ? "default" : "outline"} size="sm" onClick={() => setMessageType("email")} disabled={!clientEmail}>
+                  <Mail className="w-3 h-3 mr-1" /> Email
+                </Button>
+                <Button variant={messageType === "sms" ? "default" : "outline"} size="sm" onClick={() => setMessageType("sms")} disabled={!clientPhone}>
+                  <Phone className="w-3 h-3 mr-1" /> SMS
+                </Button>
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="message">Message (optional)</Label>
+              <Textarea id="message" placeholder="Add a personal message..." value={messageText} onChange={(e) => setMessageText(e.target.value)} className="h-20" />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowStatusDialog(false)}>Cancel</Button>
+              <Button onClick={handleSendMessage} disabled={updateStatus.isPending}>
+                {updateStatus.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {statusAction === "approve" ? "Approve" : "Decline"} & Send
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

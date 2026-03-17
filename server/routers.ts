@@ -551,6 +551,78 @@ export const appRouter = router({
       }))
       .mutation(({ input }) => db.updateBookingSettings(input)),
   }),
+
+  // ─── Messaging (Email/SMS) ────────────────────────────────────
+  messaging: router({
+    sendEstimateStatusEmail: protectedProcedure
+      .input(z.object({
+        estimateId: z.number(),
+        clientEmail: z.string().email(),
+        clientName: z.string(),
+        status: z.enum(["approved", "declined"]),
+        message: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        if (!ENV.sendgridApiKey) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "SendGrid not configured" });
+        }
+        const statusText = input.status === "approved" ? "approved" : "declined";
+        const subject = `Your estimate has been ${statusText}`;
+        const html = `
+          <p>Hi ${input.clientName},</p>
+          <p>We wanted to let you know that your estimate has been <strong>${statusText}</strong>.</p>
+          ${input.message ? `<p>${input.message}</p>` : ""}
+          <p>Thank you for your business!</p>
+        `;
+        await sendEmail({ to: input.clientEmail, subject, html });
+        return { success: true };
+      }),
+    sendWorkStartedEmail: protectedProcedure
+      .input(z.object({
+        invoiceId: z.number(),
+        clientEmail: z.string().email(),
+        clientName: z.string(),
+        message: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        if (!ENV.sendgridApiKey) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "SendGrid not configured" });
+        }
+        const subject = "Work has started on your vehicle";
+        const html = `
+          <p>Hi ${input.clientName},</p>
+          <p>We wanted to let you know that work has started on your vehicle.</p>
+          ${input.message ? `<p>${input.message}</p>` : ""}
+          <p>We'll keep you updated on the progress!</p>
+        `;
+        await sendEmail({ to: input.clientEmail, subject, html });
+        return { success: true };
+      }),
+    sendWorkCompletedEmail: protectedProcedure
+      .input(z.object({
+        invoiceId: z.number(),
+        clientEmail: z.string().email(),
+        clientName: z.string(),
+        invoiceNumber: z.string(),
+        invoiceTotal: z.string(),
+        message: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        if (!ENV.sendgridApiKey) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "SendGrid not configured" });
+        }
+        const subject = "Your vehicle is ready! Invoice INV-" + input.invoiceNumber;
+        const html = `
+          <p>Hi ${input.clientName},</p>
+          <p>Great news! Your vehicle is ready for pickup.</p>
+          <p><strong>Invoice:</strong> INV-${input.invoiceNumber}<br /><strong>Total:</strong> $${input.invoiceTotal}</p>
+          ${input.message ? `<p>${input.message}</p>` : ""}
+          <p>Thank you for choosing us!</p>
+        `;
+        await sendEmail({ to: input.clientEmail, subject, html });
+        return { success: true };
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

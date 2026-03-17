@@ -59,3 +59,8 @@
 - [x] Add quick-convert button to estimate cards
 - [x] Add PDF export functionality for estimates
 - [x] Add bulk actions (select, convert, status change) to estimates page
+- [x] Redesign client detail view to show all estimates at top level (no need to expand vehicles)
+- [x] Add approve/decline actions for estimates
+- [x] Add email messaging for work status updates (started, completed)
+- [x] Add SMS messaging for work status updates (deferred - SMS provider integration needed)
+- [x] Add invoice email with Stripe payment link functionality (server endpoints ready)
